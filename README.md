@@ -13,15 +13,12 @@
 ## 快速开始
 
 npm install
+
+创建 `.env.local` 文件，添加你的 API Key：
+
+VITE_AGNES_API_KEY=your_api_key_here
+
 npm run dev
-
-## 部署到 Vercel
-
-1. Fork 或导入此仓库到 GitHub
-2. 在 Vercel 中导入项目
-3. 添加环境变量：
-   - `AGNES_API_KEY`：你的 Agnes API Key
-4. 部署完成后访问
 
 ## 技术栈
 
@@ -29,4 +26,3 @@ npm run dev
 - Vite
 - Tailwind CSS 4
 - react-markdown
-- Vercel Serverless Functions
