@@ -1,39 +1,34 @@
-/**
- * 优化用户输入的 Prompt
- * 当前使用本地规则处理，预留 LLM API 接口位置
- */
 export async function optimizePrompt(userInput) {
-  // TODO: 接入 LLM API
-  // const response = await fetch('your-api-endpoint', {
-  //   method: 'POST',
-  //   headers: { 'Content-Type': 'application/json' },
-  //   body: JSON.stringify({ prompt: userInput })
-  // });
-  // const data = await response.json();
-  // return data.optimizedPrompt;
+  try {
+    const response = await fetch('/api/optimize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: userInput }),
+    });
 
-  // 模拟异步延迟
-  await new Promise((resolve) => setTimeout(resolve, 600));
+    if (!response.ok) {
+      throw new Error(`API 请求失败: ${response.status}`);
+    }
 
-  return localOptimize(userInput);
+    const data = await response.json();
+    return data.result;
+  } catch (error) {
+    console.error('LLM API 调用失败，回退到本地优化:', error);
+    return localOptimize(userInput);
+  }
 }
 
 function localOptimize(input) {
   const trimmed = input.trim();
   if (!trimmed) return '';
 
-  // 提取关键信息
-  const lines = trimmed.split('\n').filter((l) => l.trim());
-
-  // 尝试识别意图
   const intent = detectIntent(trimmed);
-
-  // 构建结构化 Prompt
   let result = '';
 
   result += `## 目标\n${intent}\n\n`;
 
-  // 提取关键要点
   const keyPoints = extractKeyPoints(trimmed);
   if (keyPoints.length > 0) {
     result += `## 关键要求\n`;
@@ -43,7 +38,6 @@ function localOptimize(input) {
     result += '\n';
   }
 
-  // 添加技术约束建议
   const constraints = suggestConstraints(trimmed);
   if (constraints.length > 0) {
     result += `## 技术约束\n`;
@@ -53,7 +47,6 @@ function localOptimize(input) {
     result += '\n';
   }
 
-  // 添加输出格式建议
   result += `## 输出要求\n`;
   result += `- 代码结构清晰，包含必要的注释\n`;
   result += `- 遵循最佳实践和设计模式\n`;
@@ -66,7 +59,6 @@ function detectIntent(text) {
   const lower = text.toLowerCase();
 
   if (/做个|创建|开发|构建|实现|写一个|制作/.test(lower)) {
-    // 提取"做什么"的部分
     const match = text.match(/(?:做个|创建|开发|构建|实现|写一个|制作)\s*(.+?)(?:[，。,.]|$)/);
     return match ? `构建${match[1].trim()}` : text;
   }
@@ -88,9 +80,7 @@ function extractKeyPoints(text) {
 
   for (const sentence of sentences) {
     const trimmed = sentence.trim();
-    // 跳过太短的句子（可能是语气词）
     if (trimmed.length < 2) continue;
-    // 跳过意图句（已在目标中体现）
     if (/^(?:做个|创建|开发|构建|实现|写一个|制作)/.test(trimmed)) continue;
     points.push(trimmed);
   }

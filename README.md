@@ -5,7 +5,7 @@
 ## 功能特性
 
 - 💬 聊天式交互界面，用户输入在右，AI 优化结果在左
-- ✨ 一键优化，本地规则处理（预留 LLM API 接口）
+- ✨ 一键优化，AI 智能生成结构化 Prompt
 - 📋 一键复制生成的 Prompt 到剪贴板
 - 💾 对话历史自动保存（localStorage）
 - 📱 响应式布局，支持移动端
@@ -15,10 +15,13 @@
 npm install
 npm run dev
 
-## 构建部署
+## 部署到 Vercel
 
-npm run build
-npm run preview
+1. Fork 或导入此仓库到 GitHub
+2. 在 Vercel 中导入项目
+3. 添加环境变量：
+   - `AGNES_API_KEY`：你的 Agnes API Key
+4. 部署完成后访问
 
 ## 技术栈
 
@@ -26,3 +29,4 @@ npm run preview
 - Vite
 - Tailwind CSS 4
 - react-markdown
+- Vercel Serverless Functions
