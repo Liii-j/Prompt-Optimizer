@@ -3,7 +3,7 @@ import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import InputArea from './components/InputArea';
 import ApiSettingsModal, { loadConfig } from './components/ApiSettingsModal';
-import { optimizePrompt } from './utils/promptOptimizer';
+import { optimizePrompt, deepOptimize } from './utils/promptOptimizer';
 import { loadSessions, upsertSession, deleteSession } from './utils/storage';
 
 function generateId() {
@@ -23,6 +23,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [apiConfig, setApiConfig] = useState(() => loadConfig());
   const [showSettings, setShowSettings] = useState(false);
+  const [mode, setMode] = useState('quick');
   const saveTimer = useRef(null);
 
   // 加载会话
@@ -123,7 +124,20 @@ function App() {
     setIsLoading(true);
 
     try {
-      const result = await optimizePrompt(text, apiConfig);
+      let result;
+      if (mode === 'deep') {
+        // 深度模式：发送完整对话历史
+        const apiMessages = currentSession.messages.map((m) => ({
+          role: m.role === 'user' ? 'user' : 'assistant',
+          content: m.content,
+        }));
+        // 加上当前用户输入
+        apiMessages.push({ role: 'user', content: text });
+        result = await deepOptimize(apiMessages, apiConfig);
+      } else {
+        // 快速模式：单次输入
+        result = await optimizePrompt(text, apiConfig);
+      }
       const assistantMessage = {
         id: generateId(),
         role: 'assistant',
@@ -159,7 +173,7 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeSessionId, scheduleSave, apiConfig]);
+  }, [activeSessionId, scheduleSave, apiConfig, mode]);
 
   if (loading) {
     return (
@@ -197,7 +211,7 @@ function App() {
         {hasMessages ? (
           <>
             <ChatWindow messages={messages} isLoading={isLoading} isEmpty={false} />
-            <InputArea onSend={handleSend} isLoading={isLoading} isEmpty={false} onOpenSettings={() => setShowSettings(true)} />
+            <InputArea onSend={handleSend} isLoading={isLoading} isEmpty={false} onOpenSettings={() => setShowSettings(true)} mode={mode} onModeChange={setMode} />
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center px-4">
@@ -209,7 +223,7 @@ function App() {
                 输入你的原始想法，我会将其优化为结构清晰、逻辑严密的 Prompt
               </p>
             </div>
-            <InputArea onSend={handleSend} isLoading={isLoading} isEmpty={true} onOpenSettings={() => setShowSettings(true)} />
+            <InputArea onSend={handleSend} isLoading={isLoading} isEmpty={true} onOpenSettings={() => setShowSettings(true)} mode={mode} onModeChange={setMode} />
           </div>
         )}
       </main>
