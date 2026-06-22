@@ -1,26 +1,34 @@
 import { useRef, useEffect } from 'react';
 import MessageBubble from './MessageBubble';
 
-export default function ChatWindow({ messages }) {
+export default function ChatWindow({ messages, isLoading }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isLoading]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6">
-      <div className="max-w-3xl mx-auto">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400 py-20">
-            <div className="text-5xl mb-4">✨</div>
-            <p className="text-lg font-medium">输入你的想法</p>
-            <p className="text-sm mt-1">我会帮你优化成结构清晰的 Prompt</p>
+    <div className="flex-1 overflow-y-auto px-4 relative z-10">
+      <div className="max-w-3xl mx-auto pt-10 pb-10">
+        {messages.map((msg, i) => (
+          <MessageBubble key={msg.id} message={msg} index={i} />
+        ))}
+
+        {isLoading && (
+          <div className="flex justify-start mb-4 animate-fade-up">
+            <div className="rounded-[1.5rem] p-[1px] bg-white/[0.06]">
+              <div className="rounded-[calc(1.5rem-1px)] bg-surface-card px-5 py-4">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-violet-400 loading-dot" />
+                  <div className="w-2 h-2 rounded-full bg-violet-400 loading-dot" />
+                  <div className="w-2 h-2 rounded-full bg-violet-400 loading-dot" />
+                </div>
+              </div>
+            </div>
           </div>
         )}
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
+
         <div ref={bottomRef} />
       </div>
     </div>
