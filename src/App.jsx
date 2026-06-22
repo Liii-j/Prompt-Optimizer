@@ -2,10 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import InputArea from './components/InputArea';
-import ApiSettingsModal from './components/ApiSettingsModal';
 import { optimizePrompt } from './utils/promptOptimizer';
 import { loadSessions, saveSessions } from './utils/storage';
-import { loadConfig } from './components/ApiSettingsModal';
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -22,8 +20,6 @@ function App() {
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [apiConfig, setApiConfig] = useState(() => loadConfig());
-  const [showSettings, setShowSettings] = useState(false);
 
   // 获取当前活跃会话
   const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
@@ -106,7 +102,7 @@ function App() {
     setIsLoading(true);
 
     try {
-      const result = await optimizePrompt(text, apiConfig);
+      const result = await optimizePrompt(text);
       const assistantMessage = {
         id: generateId(),
         role: 'assistant',
@@ -164,7 +160,7 @@ function App() {
         {hasMessages ? (
           <>
             <ChatWindow messages={messages} isLoading={isLoading} isEmpty={false} />
-            <InputArea onSend={handleSend} isLoading={isLoading} isEmpty={false} onOpenSettings={() => setShowSettings(true)} />
+            <InputArea onSend={handleSend} isLoading={isLoading} isEmpty={false} />
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center px-4">
@@ -176,7 +172,7 @@ function App() {
                 输入你的原始想法，我会将其优化为结构清晰、逻辑严密的 Prompt
               </p>
             </div>
-            <InputArea onSend={handleSend} isLoading={isLoading} isEmpty={true} onOpenSettings={() => setShowSettings(true)} />
+            <InputArea onSend={handleSend} isLoading={isLoading} isEmpty={true} />
           </div>
         )}
       </main>
