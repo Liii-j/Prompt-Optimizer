@@ -1,25 +1,54 @@
-const STORAGE_KEY = 'prompt-optimizer-sessions';
+import { supabase } from '../lib/supabase';
+
 const MAX_SESSIONS = 10;
 
-export function loadSessions() {
+export async function loadSessions() {
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(MAX_SESSIONS);
+
+    if (error) throw error;
+
+    return (data || []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      createdAt: new Date(row.created_at).getTime(),
+      messages: row.messages || [],
+    }));
   } catch {
     return [];
   }
 }
 
-export function saveSessions(sessions) {
+export async function upsertSession(session) {
   try {
-    // 限制最多 10 个会话，删除最旧的
-    const trimmed = sessions.slice(0, MAX_SESSIONS);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    const { error } = await supabase
+      .from('sessions')
+      .upsert({
+        id: session.id,
+        title: session.title,
+        messages: session.messages,
+        created_at: new Date(session.createdAt).toISOString(),
+      });
+
+    if (error) throw error;
   } catch {
-    // localStorage 满了或不可用，静默失败
+    // 静默失败
   }
 }
 
-export function clearAllSessions() {
-  localStorage.removeItem(STORAGE_KEY);
+export async function deleteSession(sessionId) {
+  try {
+    const { error } = await supabase
+      .from('sessions')
+      .delete()
+      .eq('id', sessionId);
+
+    if (error) throw error;
+  } catch {
+    // 静默失败
+  }
 }

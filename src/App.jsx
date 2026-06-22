@@ -1,36 +1,48 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import InputArea from './components/InputArea';
+import ApiSettingsModal, { loadConfig } from './components/ApiSettingsModal';
 import { optimizePrompt } from './utils/promptOptimizer';
-import { loadSessions, saveSessions } from './utils/storage';
+import { loadSessions, upsertSession, deleteSession } from './utils/storage';
 
 function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+  return crypto.randomUUID();
 }
 
 function generateTitle(content) {
   const trimmed = content.trim();
-  // 取前 20 个字符作为标题
   return trimmed.length > 20 ? trimmed.slice(0, 20) + '...' : trimmed;
 }
 
 function App() {
-  const [sessions, setSessions] = useState(() => loadSessions());
+  const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [apiConfig, setApiConfig] = useState(() => loadConfig());
+  const [showSettings, setShowSettings] = useState(false);
+  const saveTimer = useRef(null);
 
-  // 获取当前活跃会话
-  const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
-  const messages = activeSession?.messages || [];
-
-  // 持久化
+  // 加载会话
   useEffect(() => {
-    saveSessions(sessions);
-  }, [sessions]);
+    loadSessions().then((data) => {
+      setSessions(data);
+      if (data.length > 0) setActiveSessionId(data[0].id);
+      setLoading(false);
+    });
+  }, []);
 
-  // Ctrl+K 新建会话
+  // 防抖保存
+  const scheduleSave = useCallback((sessionsToSave) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      sessionsToSave.forEach((s) => upsertSession(s));
+    }, 500);
+  }, []);
+
+  // Ctrl+K
   useEffect(() => {
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -40,7 +52,7 @@ function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [sessions]);
+  }, []);
 
   const handleNewSession = useCallback(() => {
     const newSession = {
@@ -49,16 +61,21 @@ function App() {
       createdAt: Date.now(),
       messages: [],
     };
-    setSessions((prev) => [newSession, ...prev]);
+    setSessions((prev) => {
+      const updated = [newSession, ...prev];
+      scheduleSave(updated);
+      return updated;
+    });
     setActiveSessionId(newSession.id);
     setSidebarCollapsed(false);
-  }, []);
+  }, [scheduleSave]);
 
   const handleSelectSession = useCallback((id) => {
     setActiveSessionId(id);
   }, []);
 
   const handleDeleteSession = useCallback((id) => {
+    deleteSession(id);
     setSessions((prev) => {
       const filtered = prev.filter((s) => s.id !== id);
       if (activeSessionId === id) {
@@ -69,7 +86,6 @@ function App() {
   }, [activeSessionId]);
 
   const handleSend = useCallback(async (text) => {
-    // 如果没有活跃会话，自动创建
     let currentSessionId = activeSessionId;
     if (!currentSessionId) {
       const newSession = {
@@ -78,7 +94,11 @@ function App() {
         createdAt: Date.now(),
         messages: [],
       };
-      setSessions((prev) => [newSession, ...prev]);
+      setSessions((prev) => {
+        const updated = [newSession, ...prev];
+        scheduleSave(updated);
+        return updated;
+      });
       currentSessionId = newSession.id;
       setActiveSessionId(newSession.id);
     }
@@ -90,19 +110,20 @@ function App() {
       timestamp: Date.now(),
     };
 
-    setSessions((prev) =>
-      prev.map((s) => {
+    setSessions((prev) => {
+      const updated = prev.map((s) => {
         if (s.id !== currentSessionId) return s;
         const newMessages = [...s.messages, userMessage];
-        // 如果是第一条消息，更新标题
         const title = s.messages.length === 0 ? generateTitle(text) : s.title;
         return { ...s, messages: newMessages, title };
-      })
-    );
+      });
+      scheduleSave(updated);
+      return updated;
+    });
     setIsLoading(true);
 
     try {
-      const result = await optimizePrompt(text);
+      const result = await optimizePrompt(text, apiConfig);
       const assistantMessage = {
         id: generateId(),
         role: 'assistant',
@@ -110,13 +131,15 @@ function App() {
         isFallback: result.isFallback || false,
         timestamp: Date.now(),
       };
-      setSessions((prev) =>
-        prev.map((s) =>
+      setSessions((prev) => {
+        const updated = prev.map((s) =>
           s.id === currentSessionId
             ? { ...s, messages: [...s.messages, assistantMessage] }
             : s
-        )
-      );
+        );
+        scheduleSave(updated);
+        return updated;
+      });
     } catch {
       const errorMessage = {
         id: generateId(),
@@ -124,26 +147,40 @@ function App() {
         content: '优化过程中出现错误，请重试。',
         timestamp: Date.now(),
       };
-      setSessions((prev) =>
-        prev.map((s) =>
+      setSessions((prev) => {
+        const updated = prev.map((s) =>
           s.id === currentSessionId
             ? { ...s, messages: [...s.messages, errorMessage] }
             : s
-        )
-      );
+        );
+        scheduleSave(updated);
+        return updated;
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [activeSessionId]);
+  }, [activeSessionId, scheduleSave, apiConfig]);
 
+  if (loading) {
+    return (
+      <div className="h-[100dvh] flex items-center justify-center bg-surface">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-violet-400 loading-dot" />
+          <div className="w-2 h-2 rounded-full bg-violet-400 loading-dot" />
+          <div className="w-2 h-2 rounded-full bg-violet-400 loading-dot" />
+        </div>
+      </div>
+    );
+  }
+
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
+  const messages = activeSession?.messages || [];
   const hasMessages = messages.length > 0;
 
   return (
     <div className="h-[100dvh] flex overflow-hidden relative bg-surface">
-      {/* Ambient Glow Orbs */}
       <div className="glow-orb-purple" />
       <div className="glow-orb-emerald" />
-      {/* Noise Texture */}
       <div className="noise-overlay" />
 
       <Sidebar
@@ -160,7 +197,7 @@ function App() {
         {hasMessages ? (
           <>
             <ChatWindow messages={messages} isLoading={isLoading} isEmpty={false} />
-            <InputArea onSend={handleSend} isLoading={isLoading} isEmpty={false} />
+            <InputArea onSend={handleSend} isLoading={isLoading} isEmpty={false} onOpenSettings={() => setShowSettings(true)} />
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center px-4">
@@ -172,10 +209,17 @@ function App() {
                 输入你的原始想法，我会将其优化为结构清晰、逻辑严密的 Prompt
               </p>
             </div>
-            <InputArea onSend={handleSend} isLoading={isLoading} isEmpty={true} />
+            <InputArea onSend={handleSend} isLoading={isLoading} isEmpty={true} onOpenSettings={() => setShowSettings(true)} />
           </div>
         )}
       </main>
+
+      <ApiSettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        config={apiConfig}
+        onSave={setApiConfig}
+      />
     </div>
   );
 }

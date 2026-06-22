@@ -12,9 +12,8 @@ export default function Sidebar({
   return (
     <div className="relative flex h-full shrink-0">
       <aside
-        className={`h-full transition-all duration-500 ease-out-expo overflow-hidden ${
-          collapsed ? 'w-0' : 'w-[260px]'
-        }`}
+        className={`h-full transition-all duration-500 ease-out-expo overflow-hidden ${collapsed ? 'w-0' : 'w-[260px]'
+          }`}
       >
         <div className="w-[260px] h-full bg-[#0d0d10] border-r border-border-hairline flex flex-col">
           {/* 顶部：收起导航按钮 */}
@@ -77,6 +76,7 @@ export default function Sidebar({
               );
             })}
           </div>
+
         </div>
       </aside>
 
@@ -113,11 +113,10 @@ function SessionItem({ session, isActive, onSelect, onDelete }) {
 
   return (
     <div
-      className={`group flex items-center rounded-lg px-3 py-2 mb-0.5 cursor-pointer transition-all duration-300 ease-out-expo ${
-        isActive
-          ? 'bg-white/[0.06]'
-          : 'hover:bg-white/[0.04]'
-      }`}
+      className={`group flex items-center rounded-lg px-3 py-2 mb-0.5 cursor-pointer transition-all duration-300 ease-out-expo ${isActive
+        ? 'bg-white/[0.06]'
+        : 'hover:bg-white/[0.04]'
+        }`}
       onClick={onSelect}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
