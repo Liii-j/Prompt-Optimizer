@@ -8,6 +8,9 @@ export default function Sidebar({
   onDeleteSession,
   collapsed,
   onToggle,
+  user,
+  onLogin,
+  onLogout,
 }) {
   return (
     <div className="relative flex h-full shrink-0">
@@ -75,6 +78,38 @@ export default function Sidebar({
                 />
               );
             })}
+          </div>
+
+          {/* 底部：登录/用户信息 */}
+          <div className="px-3 pb-3 border-t border-border-hairline pt-2">
+            {user ? (
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-violet-500/20 flex items-center justify-center shrink-0">
+                  <span className="text-[11px] font-medium text-violet-400">
+                    {user.email?.[0]?.toUpperCase() || '?'}
+                  </span>
+                </div>
+                <span className="text-[12px] text-text-secondary truncate flex-1">{user.email}</span>
+                <button
+                  onClick={onLogout}
+                  className="text-[11px] text-text-tertiary hover:text-red-400 transition-colors cursor-pointer shrink-0"
+                >
+                  退出
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={onLogin}
+                className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-white/[0.06] hover:text-text-primary transition-all duration-300 ease-out-expo cursor-pointer"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                  <polyline points="10 17 15 12 10 7" />
+                  <line x1="15" y1="12" x2="3" y2="12" />
+                </svg>
+                <span>登录</span>
+              </button>
+            )}
           </div>
 
         </div>

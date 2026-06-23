@@ -1,41 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { PRESET_MODELS } from '../utils/promptOptimizer';
 
-const STORAGE_KEY = 'prompt-optimizer-api-config';
-
-function loadConfig() {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveConfig(config) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-  } catch {}
-}
-
 export default function ApiSettingsModal({ isOpen, onClose, config, onSave }) {
-  const [form, setForm] = useState({
-    apiKey: '',
-    baseUrl: '',
-    model: '',
-    temperature: 0.7,
-  });
+  if (!isOpen) return null;
 
-  useEffect(() => {
-    if (isOpen) {
-      setForm({
-        apiKey: config.apiKey || '',
-        baseUrl: config.baseUrl || '',
-        model: config.model || '',
-        temperature: config.temperature ?? 0.7,
-      });
-    }
-  }, [isOpen, config]);
+  return <ApiSettingsModalInner key={isOpen ? 'open' : 'closed'} onClose={onClose} config={config} onSave={onSave} />;
+}
+
+function ApiSettingsModalInner({ onClose, config, onSave }) {
+  const [form, setForm] = useState({
+    apiKey: config.apiKey || '',
+    baseUrl: config.baseUrl || '',
+    model: config.model || '',
+    temperature: config.temperature ?? 0.7,
+  });
 
   const handlePresetChange = (e) => {
     const preset = PRESET_MODELS.find((m) => m.model === e.target.value);
@@ -47,7 +25,6 @@ export default function ApiSettingsModal({ isOpen, onClose, config, onSave }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     onSave(form);
-    saveConfig(form);
     onClose();
   };
 
@@ -55,21 +32,15 @@ export default function ApiSettingsModal({ isOpen, onClose, config, onSave }) {
     const empty = { apiKey: '', baseUrl: '', model: '', temperature: 0.7 };
     setForm(empty);
     onSave(empty);
-    localStorage.removeItem(STORAGE_KEY);
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal */}
       <div className="relative w-full max-w-md mx-4 rounded-2xl p-[1px] bg-white/[0.08]">
         <div className="rounded-[calc(1.25rem-1px)] bg-[#0e0e10] shadow-2xl">
-          {/* Header */}
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <h2 className="font-display text-base font-semibold text-text-primary tracking-tight">API 设置</h2>
             <button
@@ -84,7 +55,6 @@ export default function ApiSettingsModal({ isOpen, onClose, config, onSave }) {
           </div>
 
           <form onSubmit={handleSubmit} className="px-5 pb-5 space-y-4">
-            {/* 预设模型选择 */}
             <div>
               <label className="block text-[11px] uppercase tracking-[0.12em] text-text-tertiary/60 font-medium mb-1.5">预设模型</label>
               <select
@@ -99,7 +69,6 @@ export default function ApiSettingsModal({ isOpen, onClose, config, onSave }) {
               </select>
             </div>
 
-            {/* API Key */}
             <div>
               <label className="block text-[11px] uppercase tracking-[0.12em] text-text-tertiary/60 font-medium mb-1.5">API Key</label>
               <input
@@ -111,7 +80,6 @@ export default function ApiSettingsModal({ isOpen, onClose, config, onSave }) {
               />
             </div>
 
-            {/* Base URL */}
             <div>
               <label className="block text-[11px] uppercase tracking-[0.12em] text-text-tertiary/60 font-medium mb-1.5">Base URL</label>
               <input
@@ -123,7 +91,6 @@ export default function ApiSettingsModal({ isOpen, onClose, config, onSave }) {
               />
             </div>
 
-            {/* Model Name */}
             <div>
               <label className="block text-[11px] uppercase tracking-[0.12em] text-text-tertiary/60 font-medium mb-1.5">模型名称</label>
               <input
@@ -135,7 +102,6 @@ export default function ApiSettingsModal({ isOpen, onClose, config, onSave }) {
               />
             </div>
 
-            {/* Temperature */}
             <div>
               <label className="block text-[11px] uppercase tracking-[0.12em] text-text-tertiary/60 font-medium mb-1.5">
                 Temperature: {form.temperature}
@@ -151,7 +117,6 @@ export default function ApiSettingsModal({ isOpen, onClose, config, onSave }) {
               />
             </div>
 
-            {/* Buttons */}
             <div className="flex items-center justify-between pt-2">
               <button
                 type="button"
@@ -182,5 +147,3 @@ export default function ApiSettingsModal({ isOpen, onClose, config, onSave }) {
     </div>
   );
 }
-
-export { loadConfig };

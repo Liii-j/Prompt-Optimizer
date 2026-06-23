@@ -1,4 +1,5 @@
 // 结构化 Prompt 优化器 - 支持多模型 API 调用 + 本地规则降级
+import { supabase } from '../lib/supabase';
 
 // 默认 API 配置
 const DEFAULT_CONFIG = {
@@ -284,6 +285,53 @@ export const PRESET_MODELS = [
   { name: 'Gemini 2.5 Pro', model: 'gemini-2.5-pro', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai' },
   { name: 'Claude 3.5 Sonnet', model: 'claude-sonnet-4-20250514', baseUrl: 'https://api.anthropic.com/v1' },
 ];
+
+// --- API Key 数据库读写 ---
+
+export async function loadApiConfig(user) {
+  if (!user) return {};
+
+  try {
+    const { data, error } = await supabase
+      .from('api_keys')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return {};
+
+    return {
+      apiKey: data.api_key || '',
+      baseUrl: data.base_url || '',
+      model: data.model || '',
+      temperature: data.temperature ?? 0.7,
+    };
+  } catch {
+    return {};
+  }
+}
+
+export async function saveApiConfig(user, config) {
+  if (!user) return;
+
+  try {
+    const { error } = await supabase
+      .from('api_keys')
+      .upsert({
+        user_id: user.id,
+        api_key: config.apiKey || '',
+        base_url: config.baseUrl || '',
+        model: config.model || '',
+        temperature: config.temperature ?? 0.7,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+
+    if (error) throw error;
+  } catch {
+    // 静默失败
+  }
+}
 
 // 核心优化函数：优先调用 API，失败则降级到本地规则
 export async function optimizePrompt(userInput, config = {}) {

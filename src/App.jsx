@@ -2,9 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatWindow from './components/ChatWindow';
 import InputArea from './components/InputArea';
-import ApiSettingsModal, { loadConfig } from './components/ApiSettingsModal';
-import { optimizePrompt, deepOptimize } from './utils/promptOptimizer';
-import { loadSessions, upsertSession, deleteSession } from './utils/storage';
+import ApiSettingsModal from './components/ApiSettingsModal';
+import AuthModal from './components/AuthModal';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { loadApiConfig, saveApiConfig, optimizePrompt, deepOptimize } from './utils/promptOptimizer';
+import { loadSessions, upsertSession, deleteSession, migrateToUser } from './utils/storage';
 
 function generateId() {
   return crypto.randomUUID();
@@ -15,47 +17,68 @@ function generateTitle(content) {
   return trimmed.length > 20 ? trimmed.slice(0, 20) + '...' : trimmed;
 }
 
-function App() {
+// 读 localStorage 匿名配置（未登录时的 fallback）
+function loadAnonConfig() {
+  try {
+    const raw = localStorage.getItem('prompt-optimizer-api-config');
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function AppInner() {
+  const { user, loading: authLoading, signOut } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [apiConfig, setApiConfig] = useState(() => loadConfig());
+  const [apiConfig, setApiConfig] = useState(() => loadAnonConfig());
   const [showSettings, setShowSettings] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
   const [mode, setMode] = useState('quick');
+  const [migrated, setMigrated] = useState(false);
   const saveTimer = useRef(null);
   const sessionsRef = useRef(sessions);
-  sessionsRef.current = sessions;
+
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  });
 
   // 加载会话
   useEffect(() => {
-    loadSessions().then((data) => {
+    loadSessions(user).then((data) => {
       setSessions(data);
       if (data.length > 0) setActiveSessionId(data[0].id);
       setLoading(false);
     });
-  }, []);
+  }, [user]);
+
+  // 用户登录后：加载 DB 配置 + 迁移数据
+  useEffect(() => {
+    if (!user || migrated) return;
+    (async () => {
+      const dbConfig = await loadApiConfig(user);
+      if (dbConfig.apiKey) {
+        setApiConfig(dbConfig);
+      }
+      await migrateToUser(user);
+      setMigrated(true);
+      // 迁移后重新加载会话
+      const data = await loadSessions(user);
+      setSessions(data);
+      if (data.length > 0) setActiveSessionId(data[0].id);
+    })();
+  }, [user, migrated]);
 
   // 防抖保存
   const scheduleSave = useCallback((sessionsToSave) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      sessionsToSave.forEach((s) => upsertSession(s));
+      sessionsToSave.forEach((s) => upsertSession(s, user));
     }, 500);
-  }, []);
-
-  // Ctrl+K
-  useEffect(() => {
-    const handler = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        handleNewSession();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [user]);
 
   const handleNewSession = useCallback(() => {
     const newSession = {
@@ -73,12 +96,24 @@ function App() {
     setSidebarCollapsed(false);
   }, [scheduleSave]);
 
+  // Ctrl+K
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        handleNewSession();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [handleNewSession]);
+
   const handleSelectSession = useCallback((id) => {
     setActiveSessionId(id);
   }, []);
 
   const handleDeleteSession = useCallback((id) => {
-    deleteSession(id);
+    deleteSession(id, user);
     setSessions((prev) => {
       const filtered = prev.filter((s) => s.id !== id);
       if (activeSessionId === id) {
@@ -86,7 +121,7 @@ function App() {
       }
       return filtered;
     });
-  }, [activeSessionId]);
+  }, [activeSessionId, user]);
 
   const handleSend = useCallback(async (text) => {
     let currentSessionId = activeSessionId;
@@ -128,18 +163,15 @@ function App() {
     try {
       let result;
       if (mode === 'deep') {
-        // 深度模式：发送完整对话历史（包含当前用户输入）
         const currentSession = sessionsRef.current.find((s) => s.id === currentSessionId);
         const existingMessages = currentSession?.messages || [];
         const apiMessages = existingMessages.map((m) => ({
           role: m.role === 'user' ? 'user' : 'assistant',
           content: m.content,
         }));
-        // 加上当前用户输入
         apiMessages.push({ role: 'user', content: text });
         result = await deepOptimize(apiMessages, apiConfig);
       } else {
-        // 快速模式：单次输入
         result = await optimizePrompt(text, apiConfig);
       }
       const assistantMessage = {
@@ -179,7 +211,24 @@ function App() {
     }
   }, [activeSessionId, scheduleSave, apiConfig, mode]);
 
-  if (loading) {
+  const handleSaveApiConfig = useCallback((config) => {
+    setApiConfig(config);
+    if (user) {
+      saveApiConfig(user, config);
+    } else {
+      localStorage.setItem('prompt-optimizer-api-config', JSON.stringify(config));
+    }
+  }, [user]);
+
+  const handleLogout = useCallback(async () => {
+    await signOut();
+    setSessions([]);
+    setActiveSessionId(null);
+    setApiConfig({});
+    setMigrated(false);
+  }, [signOut]);
+
+  if (loading || authLoading) {
     return (
       <div className="h-[100dvh] flex items-center justify-center bg-surface">
         <div className="flex items-center gap-1.5">
@@ -209,6 +258,9 @@ function App() {
         onDeleteSession={handleDeleteSession}
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        user={user}
+        onLogin={() => setShowAuth(true)}
+        onLogout={handleLogout}
       />
 
       <main className="flex-1 flex flex-col min-w-0 relative z-10">
@@ -236,10 +288,21 @@ function App() {
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
         config={apiConfig}
-        onSave={setApiConfig}
+        onSave={handleSaveApiConfig}
+      />
+
+      <AuthModal
+        isOpen={showAuth}
+        onClose={() => setShowAuth(false)}
       />
     </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
+  );
+}
