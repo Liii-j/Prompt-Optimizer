@@ -25,6 +25,8 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [mode, setMode] = useState('quick');
   const saveTimer = useRef(null);
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
 
   // 加载会话
   useEffect(() => {
@@ -126,8 +128,10 @@ function App() {
     try {
       let result;
       if (mode === 'deep') {
-        // 深度模式：发送完整对话历史
-        const apiMessages = currentSession.messages.map((m) => ({
+        // 深度模式：发送完整对话历史（包含当前用户输入）
+        const currentSession = sessionsRef.current.find((s) => s.id === currentSessionId);
+        const existingMessages = currentSession?.messages || [];
+        const apiMessages = existingMessages.map((m) => ({
           role: m.role === 'user' ? 'user' : 'assistant',
           content: m.content,
         }));
